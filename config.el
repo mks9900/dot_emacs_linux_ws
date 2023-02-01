@@ -4,6 +4,8 @@
 
 
 ;;; Code:
+
+;; Set repositories to use:
 (setq package-archives '(("elpa" . "https://elpa.gnu.org/packages/")
                          ("melpa" . "https://melpa.org/packages/")))
                          ;; ("org" . "http://orgmode.org/elpa/")))
@@ -13,15 +15,28 @@
   (package-install 'use-package))
 
 
+;; Bootstrap straight
+(defvar bootstrap-version)
+(let ((bootstrap-file
+       (expand-file-name "straight/repos/straight.el/bootstrap.el" user-emacs-directory))
+      (bootstrap-version 5))
+  (unless (file-exists-p bootstrap-file)
+    (with-current-buffer
+        (url-retrieve-synchronously
+         "https://raw.githubusercontent.com/raxod502/straight.el/develop/install.el"
+         'silent 'inhibit-cookies)
+      (goto-char (point-max))
+      (eval-print-last-sexp)))
+  (load bootstrap-file nil 'nomessage))
+
+
+;; Integrates `straight' directly into the `use-package' package through the `:straight' expression.
+(straight-use-package 'use-package)
+
+
 ;; Always use utf-8:
 (set-charset-priority 'unicode)
 (prefer-coding-system 'utf-8-unix)
-
-
-;; Show filename in title
-(setq frame-title-format
-      (list (format "%s %%S: %%j " (system-name))
-        '(buffer-file-name "%f" (dired-directory dired-directory "%b"))))
 
 
 ;; Don't produce backup-files...:
@@ -29,6 +44,7 @@
  make-backup-files nil
  auto-save-default nil
  create-lockfiles nil)
+
 
 ;; Make sure Emacs finds the right path:
 ;; (use-package exec-path-from-shell
@@ -44,44 +60,64 @@
 (setq require-final-newline t)
 
 
-;; More emphasis on active buffer:
-;; (require 'dimmer)
-;;  (dimmer-configure-which-key)
-;;  (dimmer-configure-helm)
-;;  (dimmer-mode t)
-
-;; (use-package dimmer
-;;   :custom (dimmer-fraction 0.1)
-;;   :config (dimmer-mode))
-
-
 ;; (show-paren-mode)
 ;; (setq show-paren-style 'expression)
-;; (use-package rainbow-delimiters
-  ;; :hook ((prog-mode . rainbow-delimiters-mode)))
-;; (add-hook 'prog-mode-hook #'rainbow-delimiters-mode)
-;; (electric-pair-mode)
 
-
-;; short-cut for editing config.el:
-(defun open-init-file ()
-  "Open this very file."
-  (interactive)
-  (find-file "~/.emacs.d/config.el"))
-(bind-key "C-c e" #'open-init-file)
+(use-package rainbow-delimiters
+  :straight t
+  :hook ((prog-mode . rainbow-delimiters-mode)))
+(add-hook 'prog-mode-hook #'rainbow-delimiters-mode)
+(electric-pair-mode)
 
 
 ;; edit files with sudo:
 (use-package sudo-edit)
 
 
-;; Delight sets special fonts
-(use-package delight :ensure t)
-(use-package use-package-ensure-system-package :ensure t)
-
-
 ;; Always show linenumbers in the left margin:
 (global-display-line-numbers-mode 1)
+
+
+;; Define environment variables:
+(defvar xdg-bin (getenv "XDG_BIN_HOME")
+  "The XDG bin base directory.")
+
+(defvar xdg-cache (getenv "XDG_CACHE_HOME")
+  "The XDG cache base directory.")
+
+(defvar xdg-config (getenv "XDG_CONFIG_HOME")
+  "The XDG config base directory.")
+
+;; (defvar xdg-data (getenv "XDG_DATA_HOME")
+;;   "The XDG data base directory.")
+
+;; (defvar xdg-lib (getenv "XDG_LIB_HOME")
+;;   "The XDG lib base directory.")
+
+
+;; By default, I want paste operations to indent their results. I could express
+;; this as defadvice around the yank command, but I try to avoid such measures
+;; if possible.
+(defun pt-yank ()
+  "Call yank, then indent the pasted region, as TextMate does."
+  (interactive)
+  (let ((point-before (point)))
+    (when mark-active (call-interactively 'delete-backward-char))
+    (yank)
+    (indent-region point-before (point))))
+
+(bind-key "C-y" #'pt-yank)
+(bind-key "s-v" #'pt-yank)
+(bind-key "C-Y" #'yank)
+
+
+;; Don't turn on highlighting mode of the current line
+;; in e.g. vterm:
+(require 'hl-line)
+(add-hook 'prog-mode-hook #'hl-line-mode)
+(add-hook 'text-mode-hook #'hl-line-mode)
+(set-face-attribute 'hl-line nil :background "gray21")
+
 
 
 (setq-default
@@ -112,56 +148,18 @@
 (set-default-coding-systems 'utf-8)               ; Default to utf-8 encoding
 (show-paren-mode 1)                               ; Show the parent
 
-(defvar xdg-bin (getenv "XDG_BIN_HOME")
-  "The XDG bin base directory.")
-
-(defvar xdg-cache (getenv "XDG_CACHE_HOME")
-  "The XDG cache base directory.")
-
-(defvar xdg-config (getenv "XDG_CONFIG_HOME")
-  "The XDG config base directory.")
-
-;; (defvar xdg-data (getenv "XDG_DATA_HOME")
-;;   "The XDG data base directory.")
-
-;; (defvar xdg-lib (getenv "XDG_LIB_HOME")
-;;   "The XDG lib base directory.")
-
-;; Set the font:
-(set-face-attribute 'default nil :font "Source Code Pro" :height 160)
 
 
-;; Uppstartsposition och storlek:
-;;(add-to-list 'default-frame-alist '(fullscreen . maximized))
-;; (set-frame-size (selected-frame) 100 55)
-;; (set-frame-position (selected-frame) 1100 140)
-
-
-;; By default, I want paste operations to indent their results. I could express
-;; this as defadvice around the yank command, but I try to avoid such measures
-;; if possible.
-(defun pt-yank ()
-  "Call yank, then indent the pasted region, as TextMate does."
+;; Some personalised functions and keybindings:
+;; short-cut for editing config.el:
+(defun open-init-file ()
+  "Open this very file."
   (interactive)
-  (let ((point-before (point)))
-    (when mark-active (call-interactively 'delete-backward-char))
-    (yank)
-    (indent-region point-before (point))))
-
-(bind-key "C-y" #'pt-yank)
-(bind-key "s-v" #'pt-yank)
-(bind-key "C-Y" #'yank)
+  (find-file "~/.emacs.d/config.el"))
+(bind-key "C-c e" #'open-init-file)
 
 
-;; Don't turn on highlighting mode of the current line
-;; in e.g. vterm:
-(require 'hl-line)
-(add-hook 'prog-mode-hook #'hl-line-mode)
-(add-hook 'text-mode-hook #'hl-line-mode)
-(set-face-attribute 'hl-line nil :background "gray21")
-
-
-;; Kommentera/bortkommentera oberoende av språk:
+;; Comment/uncomment lines of marked code:
 (defun comment-or-uncomment-line-or-region ()
   "Comments or uncomments the current line or region."
   (interactive)
@@ -175,37 +173,35 @@
 
 
 
-;; Scrollhastighet, musen: De här båda slöar ner scrollningen mycket!!
-(setq mouse-wheel-scroll-amount '(1 ((shift) . 1) ((control) . nil)))
+;; Mouse scroll speed:
+(setq mouse-wheel-scroll-amount '(2 ((shift) . 2) ((control) . nil)))
 (setq mouse-wheel-progressive-speed nil)
 
 
-;; Bootstrap straight
-(defvar bootstrap-version)
-(let ((bootstrap-file
-       (expand-file-name "straight/repos/straight.el/bootstrap.el" user-emacs-directory))
-      (bootstrap-version 5))
-  (unless (file-exists-p bootstrap-file)
-    (with-current-buffer
-        (url-retrieve-synchronously
-         "https://raw.githubusercontent.com/raxod502/straight.el/develop/install.el"
-         'silent 'inhibit-cookies)
-      (goto-char (point-max))
-      (eval-print-last-sexp)))
-  (load bootstrap-file nil 'nomessage))
+
+;; Theming and looks:
+;; Show filename in title
+(setq frame-title-format
+      (list (format "%s %%S: %%j " (system-name))
+        '(buffer-file-name "%f" (dired-directory dired-directory "%b"))))
 
 
-;; Integrates `straight' directly into the `use-package' package through the `:straight' expression.
-(straight-use-package 'use-package)
+;; Set the font:
+(set-face-attribute 'default nil :font "Source Code Pro" :height 160)
 
 
-;; I needed to install these manually by M-x install-package?
-;; Appearance of Emacs:
+;; Starting position and size of window:
+;;(add-to-list 'default-frame-alist '(fullscreen . maximized))
+;; (set-frame-size (selected-frame) 100 55)
+;; (set-frame-position (selected-frame) 1100 140)
+
+
 (use-package doom-themes
   :straight t
   :config
   (load-theme 'doom-material t)
   (doom-themes-org-config))
+
 
 (use-package doom-modeline
   :straight t
@@ -215,8 +211,7 @@
   (doom-modeline-mu4e t))
 
 
-;; darken "unreal" buffers to focus on
-;; the ones you code in:
+;; darken "unreal" buffers to focus on the ones you code in:
 (use-package solaire-mode
   :straight t
   :defer 0.1
@@ -224,21 +219,37 @@
   :config (solaire-global-mode))
 
 
-;; ;; add icons to the files:
+;; More emphasis on active buffer:
+(use-package dimmer
+  :straight t
+  :custom (dimmer-fraction 0.5)
+  :config (dimmer-mode))
+
+
+;; Delight sets special fonts
+(use-package delight
+  :straight t
+  :ensure t)
+(use-package use-package-ensure-system-package :ensure t)
+
+
+;; add icons to the files:
 (use-package all-the-icons-completion
   :straight t
   :after (marginalia all-the-icons)
   :hook (marginalia-mode . all-the-icons-completion-marginalia-setup))
 
 
+
 ;; Use flycheck to check code...
 (use-package flycheck
   :straight t
   :ensure t
-  :init (global-flycheck-mode))
+  :init (global-flycheck-mode)
+  :hook (after-init . global-flycheck-mode))
 ;; How can this be set on a per project way?
-;; It seems flake8 doesn't support this...
-;; (setq flycheck-flake8rc "/home/johanthor/.config/.flake8")
+;; It seems flake8 doesn't support this?
+(setq flycheck-flake8rc "/home/johanthor/.config/.flake8")
 
 
 ;; ibuffer
@@ -268,62 +279,28 @@
   ("M-l" . windmove-right)))
 
 
-;; ;; magit
-;; (use-package magit
-;;   :diminish magit-auto-revert-mode
-;;   :diminish auto-revert-mode
-;;   :bind (("C-c g" . #'magit-status))
-;;   :custom
-;;   (magit-repository-directories '(("~/code" . 1)))
-;;   :config
-;;   (add-to-list 'magit-no-confirm 'stage-all-changes))
-
-;; (use-package magit-filenotify
-;;   :straight t
-;;   :commands (magit-filenotify-mode)
-;;   :hook (magit-status-mode . magit-filenotify-mode))
-
-
-;; ;; optionally if you want to use debugger
-;; (use-package dap-mode)
-;; ;; (use-package dap-LANGUAGE) to load the dap adapter for your language
-
-
-;; ;; optional if you want which-key integration
-;; (use-package which-key
-;;     :config
-;;     (which-key-mode))
-
-
-;; imenu
-(use-package imenu
+;; magit
+(use-package magit
   :straight t
-  :ensure nil
-  :preface
-  (defun my/smarter-move-beginning-of-line (arg)
-    "Move point back to indentation of beginning of line.
+  :diminish magit-auto-revert-mode
+  :diminish auto-revert-mode
+  :bind (("C-c g" . #'magit-status))
+  :custom
+  (magit-repository-directories '(("~/code" . 1)))
+  :config
+  (add-to-list 'magit-no-confirm 'stage-all-changes))
 
-   Move point to the first non-whitespace character on this line.
-   If point is already there, move to the beginning of the line.
-   Effectively toggle between the first non-whitespace character and
-   the beginning of the line.
+(use-package magit-filenotify
+  :straight t
+  :commands (magit-filenotify-mode)
+  :hook (magit-status-mode . magit-filenotify-mode))
 
-   If ARG is not nil or 1, move forward ARG - 1 lines first. If
-   point reaches the beginning or end of the buffer, stop there."
-    (interactive "^p")
-    (setq arg (or arg 1))
 
-    ;; Move lines first
-    (when (/= arg 1)
-      (let ((line-move-visual nil))
-        (forward-line (1- arg))))
-
-    (let ((orig-point (point)))
-      (back-to-indentation)
-      (when (= orig-point (point))
-        (move-beginning-of-line 1))))
-  :bind (("C-a" . my/smarter-move-beginning-of-line)
-         ("C-r" . imenu)))
+;; optional if you want which-key integration
+(use-package which-key
+  :straight t
+    :config
+    (which-key-mode))
 
 
 ;;
@@ -346,27 +323,6 @@
     (split-window-vertically)
     (other-window 1)))
 
-;; (use-package centered-window
-;;   :custom
-;;   (cwm-centered-window-width 130)
-;;   (cwm-frame-internal-border 0)
-;;   (cwm-incremental-padding t)
-;;   (cwm-incremental-padding-% 2)
-;;   (cwm-left-fringe-ratio 0)
-;;   (cwm-use-vertical-padding t)
-;;   :config (centered-window-mode))
-
-
-
-;; (use-package switch-window
-;;   :bind (("C-x o" . switch-window)
-;;          ("C-x w" . switch-window-then-swap-buffer)))
-
-
-;; (use-package winner
-;;   :ensure nil
-;;   :config (winner-mode))
-
 
 ;; vertico provides vertical interactive mode for autocompletion
 (use-package vertico
@@ -387,6 +343,7 @@
   (marginalia-annotators '(marginalia-annotators-heavy marginalia-annotators-light nil)))
 
 
+;; Different modes for different cases...
 ;;
 (use-package sh-script
   :straight t
@@ -489,6 +446,54 @@
   :diminish company-mode
   :init
   (global-company-mode)
+  :config
+  ;; set default `company-backends'
+  (setq company-backends
+        '((company-files          ; files & directory
+           company-keywords       ; keywords
+           company-capf)  ; completion-at-point-functions
+          (company-abbrev company-dabbrev)
+          ))(use-package company-statistics
+    :straight t
+    :init
+    (company-statistics-mode))(use-package company-web
+    :straight t)(use-package company-try-hard
+    :straight t
+    :bind
+    (("C-<tab>" . company-try-hard)
+     :map company-active-map
+     ("C-<tab>" . company-try-hard)))(use-package company-quickhelp
+    :straight t
+    :config
+    (company-quickhelp-mode))
+)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(use-package company
+  :straight t
+  :diminish company-mode
+  :init
+  (global-company-mode)
   :hook (prog-mode . company-mode)
   :custom
   (company-dabbrev-downcase nil "Don't downcase returned candidates.")
@@ -542,60 +547,52 @@
   )
 
 
-;;
-;; (use-package yasnippet
-;;   :defer 3 ;; takes a while to load, so do it async
-;;   :diminish yas-minor-mode
-;;   :config (yas-global-mode)
-;;   :custom (yas-prompt-functions '(yas-completing-prompt)))
-
 
 
 ;; Python-section
 
-;; (use-package python
-;;   :mode ("\\.py" . python-mode)
-;;   :ensure t
-;;   :config
-;;   (setq python-shell-interpreter "~/.pyenv/shims/ipython3"
-;;         python-shell-interpreter-args "-i --simple-prompt --InteractiveShell.display_page=True")
-;;   (setq python-indent-offset 4)
+(use-package python
+  :straight t
+  :mode ("\\.py" . python-mode)
+  :ensure t
+  :config
+  (setq python-shell-interpreter "~/.pyenv/shims/python3"
+        python-shell-interpreter-args "-i --simple-prompt --InteractiveShell.display_page=True")
+  (setq python-indent-offset 4)
 
-;;   (define-key python-mode-map (kbd "C-c C-r") 'python-shell-send-region)
-;;   (define-key python-mode-map (kbd "C-c C-b") 'python-shell-send-buffer)
-;; )
-
-
-
-;; (use-package lsp-mode
-;;   :init
-;;   ;; set prefix for lsp-command-keymap (few alternatives - "C-l", "C-c l")
-;;   (setq lsp-keymap-prefix "C-c l")
-;;   :hook (;; replace XXX-mode with concrete major-mode(e. g. python-mode)
-;;          (python-mode . lsp)
-;;          (latex-mode . lsp)
-;;          ;; if you want which-key integration
-;;          (lsp-mode . lsp-enable-which-key-integration))
-;;   :commands lsp)
-
-;; ;; optionally
-;; (use-package lsp-ui :commands lsp-ui-mode)
-;; ;; if you are helm user
-;; (use-package helm-lsp :commands helm-lsp-workspace-symbol)
-;; if you are ivy user
-;; (use-package lsp-ivy :commands lsp-ivy-workspace-symbol)
-;; (use-package lsp-treemacs :commands lsp-treemacs-errors-list)
+  (define-key python-mode-map (kbd "C-c C-r") 'python-shell-send-region)
+  (define-key python-mode-map (kbd "C-c C-b") 'python-shell-send-buffer)
+)
 
 
-;; ;; pip install pyright needs to be pip-installed in the env you're using
-;; (use-package lsp-pyright
-;;   :ensure t
-;;   :hook (python-mode . (lambda ()
-;;                           (require 'lsp-pyright)
-;;                           (lsp))))  ; or lsp-deferred
+;; elpy from here:https://medium.com/analytics-vidhya/managing-a-python-development-environment-in-emacs-43897fd48c6a
+(use-package elpy
+    :straight t
+    :bind
+    (:map elpy-mode-map
+          ("C-M-n" . elpy-nav-forward-block)
+          ("C-M-p" . elpy-nav-backward-block))
+	:hook (elpy-mode . (lambda () (add-hook 'before-save-hook 'elpy-format-code)))
+    :hook (elpy-mode . flycheck-mode)
+    ;;        (elpy-mode . (lambda ()
+    ;;                       (set (make-local-variable 'company-backends)
+    ;;                            '((elpy-company-backend :with company-yasnippet))))))
+    ;; :init
+    ;; (elpy-enable)
+	:init (advice-add 'python-mode :before 'elpy-enable)
+    :config
+    (setq elpy-modules (delq 'elpy-module-flymake elpy-modules))
+    ; fix for MacOS, see https://github.com/jorgenschaefer/elpy/issues/1550
+    ;; (setq elpy-shell-echo-output nil)
+    ;; (setq elpy-rpc-python-command "python3")
+	(setq elpy-rpc-python-command "~/.pyenv/shims/python3")
+    (setq elpy-rpc-timeout 2))
+
 
 
 ;; Pyenv
+
+;; OLD
 ;; (use-package pyenv
 ;;     :straight (:host github :repo "aiguofer/pyenv.el")
 ;;     :config
@@ -612,36 +609,70 @@
 ;;           (progn
 ;;             (pyenv-use-corresponding)
 ;;             (pyvenv-activate (concat (pyenv--prefix) "/"))
-;;             )))
+;;             ))
 ;;     (add-hook 'switch-buffer-functions 'pyenv-update-on-buffer-switch)
-;;     )
-
-;;   (use-package buftra
-;;     :straight (:host github :repo "humitos/buftra.el"))
+;;     ))
+;; ;; )
 
 
-;; for good function-commenting:
-;; (use-package py-pyment
-;;     :straight (:host github :repo "humitos/py-cmd-buffer.el")
-;;     :config
-;;     (setq py-pyment-options '("--output=numpydoc")))
+(use-package pyenv
+    :straight (:host github :repo "aiguofer/pyenv.el")
+    :config
+    (setq pyenv-use-alias 't)
+    (setq pyenv-modestring-prefix " ")
+    (setq pyenv-modestring-postfix nil)
+	(setq pyenv-set-path ".pyenv/shims")
+	(global-pyenv-mode)
+    (defun pyenv-update-on-buffer-switch (prev curr)
+      (if (string-equal "Python" (format-mode-line mode-name nil nil curr))
+          (pyenv-use-corresponding)))
+    (add-hook 'switch-buffer-functions 'pyenv-update-on-buffer-switch))
 
 
-;;
-;; (use-package python-docstring
-;;     :straight t
-;;     :hook (python-mode . python-docstring-mode))
+
+(use-package buftra
+  :straight (:host github :repo "humitos/buftra.el"))
+
+(use-package py-pyment
+    :straight (:host github :repo "humitos/py-cmd-buffer.el")
+    :config
+    (setq py-pyment-options '("--output=numpydoc")))
+
+(use-package py-isort
+    :straight (:host github :repo "humitos/py-cmd-buffer.el")
+    :hook (python-mode . py-isort-enable-on-save)
+    :config
+    (setq py-isort-options '("--lines=88" "-m=3" "-tc" "-fgw=0" "-ca")))
+
+(use-package py-autoflake
+    :straight (:host github :repo "humitos/py-cmd-buffer.el")
+    :hook (python-mode . py-autoflake-enable-on-save)
+    :config
+    (setq py-autoflake-options '("--expand-star-imports")))
+
+(use-package py-docformatter
+    :straight (:host github :repo "humitos/py-cmd-buffer.el")
+    :hook (python-mode . py-docformatter-enable-on-save)
+    :config
+    (setq py-docformatter-options '("--wrap-summaries=88" "--pre-summary-newline")))
+
+(use-package blacken
+    :straight t
+    :hook (python-mode . blacken-mode)
+    :config
+    (setq blacken-line-length '88))
+
+(use-package python-docstring
+    :straight t
+    :hook (python-mode . python-docstring-mode))
 
 
-;; (use-package blacken
-;;   :delight
-;;   :hook (python-mode . blacken-mode))
-
-;; (use-package py-isort
-;;   :hook ((before-save . py-isort-before-save)
-;;          (python-mode . py-isort-enable-on-save))
-;;   :config
-;;   (setq py-isort-options '("-l=88" "--profile=black")))
+(use-package py-isort
+  :straight t
+  :hook ((before-save . py-isort-before-save)
+         (python-mode . py-isort-enable-on-save))
+  :config
+  (setq py-isort-options '("-l=88" "--profile=black")))
 
 
 
@@ -682,9 +713,9 @@
 ;; ;; you can specify the path to "texlab" as follows:
 ;; (setq lsp-latex-texlab-executable "/home/linuxbrew/.linuxbrew/bin/texlab")
 
-(with-eval-after-load "tex-mode"
- (add-hook 'tex-mode-hook 'lsp)
- (add-hook 'latex-mode-hook 'lsp))
+;; (with-eval-after-load "tex-mode"
+;;  (add-hook 'tex-mode-hook 'lsp)
+;;  (add-hook 'latex-mode-hook 'lsp))
 
 
 

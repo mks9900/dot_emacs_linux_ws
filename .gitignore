@@ -8,3 +8,9 @@ ido.last
 straight/
 auto-save-list/
 tramp
+elpy
+elpa
+eshell
+snippets
+transient
+.cache
